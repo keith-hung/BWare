@@ -102,3 +102,8 @@ Podfile.lock
 
 # Firebase
 GoogleService-Info.plist
+
+# Distribution
+dist/
+*.dmg
+*.zip
