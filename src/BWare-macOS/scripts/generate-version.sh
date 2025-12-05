@@ -4,9 +4,10 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+REPO_ROOT="$(cd "$PROJECT_DIR/../.." && pwd)"
 
-# Read semver from VERSION file
-SEMVER=$(cat "$PROJECT_DIR/VERSION" | tr -d '\n')
+# Read semver from repository root VERSION file (single source of truth)
+SEMVER=$(cat "$REPO_ROOT/VERSION" | tr -d '\n')
 
 # Get git commit info
 cd "$PROJECT_DIR"
