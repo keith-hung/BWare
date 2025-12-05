@@ -30,6 +30,10 @@ class StatusItemManager: NSObject, AlertStateDelegate {
     /// Combine subscriptions
     private var cancellables = Set<AnyCancellable>()
 
+    /// Event monitors for click handling
+    private var globalMonitor: Any?
+    private var localMonitor: Any?
+
     /// Click handler for alert triggering
     var onAlertTrigger: (() -> Void)?
 
@@ -44,10 +48,18 @@ class StatusItemManager: NSObject, AlertStateDelegate {
         setupButton()
         setupMenu()
         setupTimerObserver()
+        setupButtonAction()
         print("[StatusItemManager] init() completed")
     }
 
     deinit {
+        // Remove event monitors
+        if let monitor = globalMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+        if let monitor = localMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
         statusItem.statusBar?.removeStatusItem(statusItem)
         cancellables.removeAll()
     }
@@ -188,24 +200,28 @@ class StatusItemManager: NSObject, AlertStateDelegate {
         statusMenu?.onQuitRequested = {
             NSApplication.shared.terminate(nil)
         }
-
-        // Global monitor for clicks (works even without focus)
-        NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-            self?.handleGlobalClick(event)
-        }
-
-        // Local monitor for when app has focus
-        NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-            self?.handleGlobalClick(event)
-            return event
-        }
     }
 
-    private func handleGlobalClick(_ event: NSEvent) {
+    private func setupButtonAction() {
+        // Use event monitors for click handling (works reliably on macOS 12+)
+        // Global monitor: captures clicks when other apps have focus
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            self?.handleClick(event)
+        }
+
+        // Local monitor: captures clicks when this app has focus
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            self?.handleClick(event)
+            return event
+        }
+        print("[StatusItemManager] Event monitors configured")
+    }
+
+    private func handleClick(_ event: NSEvent) {
         guard let button = statusItem.button,
               let window = button.window else { return }
 
-        // Get mouse location in screen coordinates
+        // Check if click is within status item bounds
         let mouseLocation = NSEvent.mouseLocation
         let buttonFrameInWindow = button.convert(button.bounds, to: nil)
         let buttonFrameInScreen = window.convertToScreen(buttonFrameInWindow)
@@ -213,10 +229,10 @@ class StatusItemManager: NSObject, AlertStateDelegate {
         guard buttonFrameInScreen.contains(mouseLocation) else { return }
 
         if event.type == .leftMouseDown {
-            print("[StatusItemManager] Left click detected on icon")
+            print("[StatusItemManager] Left click detected")
             handleAlertTrigger()
         } else if event.type == .rightMouseDown {
-            print("[StatusItemManager] Right click detected on icon")
+            print("[StatusItemManager] Right click detected")
             showMenu()
         }
     }
@@ -239,7 +255,13 @@ class StatusItemManager: NSObject, AlertStateDelegate {
     }
 
     private func handleAlertTrigger() {
-        print("[StatusItemManager] handleAlertTrigger called")
+        print("[StatusItemManager] handleAlertTrigger called, currentState: \(currentState.status.rawValue)")
+
+        // Ignore if already in alert state
+        if currentState.status == .alert {
+            print("[StatusItemManager] Already in alert state - ignoring click")
+            return
+        }
 
         // Only trigger if connected
         if connectionStatus == .connected {
