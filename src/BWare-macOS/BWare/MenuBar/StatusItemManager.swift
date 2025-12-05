@@ -74,27 +74,13 @@ class StatusItemManager: NSObject, AlertStateDelegate {
         updateIcon(for: currentState.status)
         updateTooltip()
 
-        // Diagnostic info
-        if let button = statusItem.button {
-            print("[StatusItemManager] === DIAGNOSTIC INFO ===")
-            print("[StatusItemManager] button.frame: \(button.frame)")
-            print("[StatusItemManager] button.bounds: \(button.bounds)")
-            print("[StatusItemManager] button.isHidden: \(button.isHidden)")
-            print("[StatusItemManager] button.alphaValue: \(button.alphaValue)")
-            print("[StatusItemManager] button.image: \(String(describing: button.image))")
-            print("[StatusItemManager] button.image?.size: \(String(describing: button.image?.size))")
-            print("[StatusItemManager] button.image?.isValid: \(String(describing: button.image?.isValid))")
-            if let window = button.window {
-                print("[StatusItemManager] button.window exists: true")
-                print("[StatusItemManager] window.isVisible: \(window.isVisible)")
-                print("[StatusItemManager] window.frame: \(window.frame)")
-                let screenFrame = window.convertToScreen(button.frame)
-                print("[StatusItemManager] button screen position: \(screenFrame)")
-            } else {
-                print("[StatusItemManager] button.window exists: false  ⚠️ NO WINDOW!")
-            }
-            print("[StatusItemManager] === END DIAGNOSTIC ===")
+        // Defer to next run loop to ensure window is fully initialized
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.updateIcon(for: self.currentState.status)
+            print("[StatusItemManager] Deferred icon update completed")
         }
+
         print("[StatusItemManager] show() completed, button exists: \(statusItem.button != nil)")
     }
 
@@ -115,7 +101,7 @@ class StatusItemManager: NSObject, AlertStateDelegate {
         switch connectionStatus {
         case .connecting, .disconnected:
             print("[StatusItemManager] Setting disconnected icon (gray)")
-            button.image = MenuBarIcons.disconnectedIcon
+            MenuBarIcons.applyDisconnectedIcon(to: button)
             return
         case .connected:
             break
@@ -123,9 +109,9 @@ class StatusItemManager: NSObject, AlertStateDelegate {
 
         switch status {
         case .normal:
-            button.image = MenuBarIcons.normalIcon
+            MenuBarIcons.applyNormalIcon(to: button)
         case .alert:
-            button.image = MenuBarIcons.alertIcon
+            MenuBarIcons.applyAlertIcon(to: button)
         }
     }
 
@@ -187,9 +173,8 @@ class StatusItemManager: NSObject, AlertStateDelegate {
         }
 
         // Set default icon
-        let icon = MenuBarIcons.normalIcon
-        print("[StatusItemManager] Setting initial icon, size: \(icon.size)")
-        button.image = icon
+        print("[StatusItemManager] Setting initial icon")
+        MenuBarIcons.applyNormalIcon(to: button)
     }
 
     private func setupMenu() {

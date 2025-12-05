@@ -1,63 +1,50 @@
 import AppKit
 
-/// Menu bar icon assets.
-/// Uses programmatic drawing for consistent cross-version compatibility.
+/// Menu bar icon rendering using SF Symbols.
 struct MenuBarIcons {
-    /// Standard menu bar icon size
-    private static let iconSize: CGFloat = 18
-
-    /// Normal state icon (green circle)
-    static var normalIcon: NSImage {
-        print("[MenuBarIcons] Creating normalIcon (green)")
-        return circleIcon(color: .systemGreen)
+    /// Normal state (green)
+    static func applyNormalIcon(to button: NSStatusBarButton) {
+        print("[MenuBarIcons] Applying normalIcon (green)")
+        applySymbol(to: button, color: .systemGreen)
     }
 
-    /// Alert state icon (red circle)
-    static var alertIcon: NSImage {
-        print("[MenuBarIcons] Creating alertIcon (red)")
-        return circleIcon(color: .systemRed)
+    /// Alert state (red)
+    static func applyAlertIcon(to button: NSStatusBarButton) {
+        print("[MenuBarIcons] Applying alertIcon (red)")
+        applySymbol(to: button, color: .systemRed)
     }
 
-    /// Disconnected state icon (gray circle)
-    static var disconnectedIcon: NSImage {
-        print("[MenuBarIcons] Creating disconnectedIcon (gray)")
-        return circleIcon(color: .systemGray)
+    /// Disconnected state (gray)
+    static func applyDisconnectedIcon(to button: NSStatusBarButton) {
+        print("[MenuBarIcons] Applying disconnectedIcon (gray)")
+        applySymbol(to: button, color: .systemGray)
     }
 
-    /// Creates a colored circle icon programmatically
-    static func circleIcon(color: NSColor, size: CGFloat = 18) -> NSImage {
-        print("[MenuBarIcons] circleIcon() creating \(size)x\(size) image")
-        let image = NSImage(size: NSSize(width: size, height: size))
-        image.lockFocus()
+    private static func applySymbol(to button: NSStatusBarButton, color: NSColor) {
+        guard let baseImage = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil) else {
+            print("[MenuBarIcons] ERROR: Failed to create SF Symbol")
+            return
+        }
 
-        // Draw filled circle
-        let rect = NSRect(x: 2, y: 2, width: size - 4, height: size - 4)
-        let path = NSBezierPath(ovalIn: rect)
-        color.setFill()
-        path.fill()
+        let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .regular)
+        let configuredImage = baseImage.withSymbolConfiguration(config) ?? baseImage
 
-        image.unlockFocus()
-        image.isTemplate = false
-        print("[MenuBarIcons] circleIcon() created, size: \(image.size), isValid: \(image.isValid)")
-        return image
-    }
-}
+        // Tint the image
+        let tintedImage = NSImage(size: configuredImage.size, flipped: false) { rect in
+            configuredImage.draw(in: rect)
+            color.set()
+            rect.fill(using: .sourceAtop)
+            return true
+        }
+        tintedImage.isTemplate = false
 
-// MARK: - NSImage Extension for Tinting
+        button.image = tintedImage
+        button.attributedTitle = NSAttributedString(string: "")
 
-extension NSImage {
-    /// Creates a copy of the image with the specified tint color.
-    func tinted(with color: NSColor) -> NSImage {
-        let image = self.copy() as! NSImage
-        image.lockFocus()
+        // Force redraw
+        button.needsDisplay = true
+        button.window?.display()
 
-        color.set()
-
-        let imageRect = NSRect(origin: .zero, size: image.size)
-        imageRect.fill(using: .sourceAtop)
-
-        image.unlockFocus()
-        image.isTemplate = false
-        return image
+        print("[MenuBarIcons] Applied SF Symbol with color: \(color)")
     }
 }
