@@ -34,14 +34,17 @@ class StatusItemManager: NSObject, AlertStateDelegate {
     var onAlertTrigger: (() -> Void)?
 
     override init() {
+        print("[StatusItemManager] init() started")
         // Create status item with square length (standard for icons)
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        print("[StatusItemManager] statusItem created, button exists: \(statusItem.button != nil)")
 
         super.init()
 
         setupButton()
         setupMenu()
         setupTimerObserver()
+        print("[StatusItemManager] init() completed")
     }
 
     deinit {
@@ -53,9 +56,34 @@ class StatusItemManager: NSObject, AlertStateDelegate {
 
     /// Shows the status item in the menu bar.
     func show() {
+        print("[StatusItemManager] show() called")
         statusItem.isVisible = true
+        print("[StatusItemManager] statusItem.isVisible set to true")
         updateIcon(for: currentState.status)
         updateTooltip()
+
+        // Diagnostic info
+        if let button = statusItem.button {
+            print("[StatusItemManager] === DIAGNOSTIC INFO ===")
+            print("[StatusItemManager] button.frame: \(button.frame)")
+            print("[StatusItemManager] button.bounds: \(button.bounds)")
+            print("[StatusItemManager] button.isHidden: \(button.isHidden)")
+            print("[StatusItemManager] button.alphaValue: \(button.alphaValue)")
+            print("[StatusItemManager] button.image: \(String(describing: button.image))")
+            print("[StatusItemManager] button.image?.size: \(String(describing: button.image?.size))")
+            print("[StatusItemManager] button.image?.isValid: \(String(describing: button.image?.isValid))")
+            if let window = button.window {
+                print("[StatusItemManager] button.window exists: true")
+                print("[StatusItemManager] window.isVisible: \(window.isVisible)")
+                print("[StatusItemManager] window.frame: \(window.frame)")
+                let screenFrame = window.convertToScreen(button.frame)
+                print("[StatusItemManager] button screen position: \(screenFrame)")
+            } else {
+                print("[StatusItemManager] button.window exists: false  ⚠️ NO WINDOW!")
+            }
+            print("[StatusItemManager] === END DIAGNOSTIC ===")
+        }
+        print("[StatusItemManager] show() completed, button exists: \(statusItem.button != nil)")
     }
 
     /// Hides the status item from the menu bar.
@@ -65,11 +93,16 @@ class StatusItemManager: NSObject, AlertStateDelegate {
 
     /// Updates the icon based on alert status.
     func updateIcon(for status: AlertStatus) {
-        guard let button = statusItem.button else { return }
+        print("[StatusItemManager] updateIcon called, status: \(status.rawValue)")
+        guard let button = statusItem.button else {
+            print("[StatusItemManager] ERROR: button is nil in updateIcon!")
+            return
+        }
 
         // Check connection status first - show gray for connecting or disconnected
         switch connectionStatus {
         case .connecting, .disconnected:
+            print("[StatusItemManager] Setting disconnected icon (gray)")
             button.image = MenuBarIcons.disconnectedIcon
             return
         case .connected:
@@ -136,10 +169,15 @@ class StatusItemManager: NSObject, AlertStateDelegate {
     // MARK: - Private Methods
 
     private func setupButton() {
-        guard let button = statusItem.button else { return }
+        guard let button = statusItem.button else {
+            print("[StatusItemManager] Error: statusItem.button is nil")
+            return
+        }
 
         // Set default icon
-        button.image = MenuBarIcons.normalIcon
+        let icon = MenuBarIcons.normalIcon
+        print("[StatusItemManager] Setting initial icon, size: \(icon.size)")
+        button.image = icon
     }
 
     private func setupMenu() {

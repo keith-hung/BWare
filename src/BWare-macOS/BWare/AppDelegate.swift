@@ -16,6 +16,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var settingsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        print("[AppDelegate] Application did finish launching")
+
         // Register for settings notification
         NotificationCenter.default.addObserver(
             self,
@@ -30,16 +32,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         )
 
         // Initialize menu bar item
+        print("[AppDelegate] Initializing status item manager")
         statusItemManager = StatusItemManager()
         statusItemManager?.show()
+        print("[AppDelegate] Status item manager initialized and shown")
 
         // Hide any windows on launch
         NSApplication.shared.windows.forEach { $0.close() }
 
         // Check for first-run setup
         if ClientConfiguration.load() == nil {
+            print("[AppDelegate] No configuration found, showing first-run setup")
             showConfigurationWindow(isFirstRun: true)
         } else {
+            print("[AppDelegate] Configuration found, initializing Firebase")
             initializeFirebase()
         }
     }

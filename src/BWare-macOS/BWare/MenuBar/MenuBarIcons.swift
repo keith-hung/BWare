@@ -1,31 +1,32 @@
 import AppKit
 
 /// Menu bar icon assets.
-/// Uses SF Symbols with template rendering for automatic dark mode support.
+/// Uses programmatic drawing for consistent cross-version compatibility.
 struct MenuBarIcons {
+    /// Standard menu bar icon size
+    private static let iconSize: CGFloat = 18
+
     /// Normal state icon (green circle)
-    static var normalIcon: NSImage? {
-        let image = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: "Normal")
-        image?.isTemplate = false
-        return image?.tinted(with: .systemGreen)
+    static var normalIcon: NSImage {
+        print("[MenuBarIcons] Creating normalIcon (green)")
+        return circleIcon(color: .systemGreen)
     }
 
     /// Alert state icon (red circle)
-    static var alertIcon: NSImage? {
-        let image = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: "Alert")
-        image?.isTemplate = false
-        return image?.tinted(with: .systemRed)
+    static var alertIcon: NSImage {
+        print("[MenuBarIcons] Creating alertIcon (red)")
+        return circleIcon(color: .systemRed)
     }
 
     /// Disconnected state icon (gray circle)
-    static var disconnectedIcon: NSImage? {
-        let image = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: "Disconnected")
-        image?.isTemplate = false
-        return image?.tinted(with: .systemGray)
+    static var disconnectedIcon: NSImage {
+        print("[MenuBarIcons] Creating disconnectedIcon (gray)")
+        return circleIcon(color: .systemGray)
     }
 
     /// Creates a colored circle icon programmatically
     static func circleIcon(color: NSColor, size: CGFloat = 18) -> NSImage {
+        print("[MenuBarIcons] circleIcon() creating \(size)x\(size) image")
         let image = NSImage(size: NSSize(width: size, height: size))
         image.lockFocus()
 
@@ -37,6 +38,7 @@ struct MenuBarIcons {
 
         image.unlockFocus()
         image.isTemplate = false
+        print("[MenuBarIcons] circleIcon() created, size: \(image.size), isValid: \(image.isValid)")
         return image
     }
 }

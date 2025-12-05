@@ -116,3 +116,6 @@ dist/
 .specify/
 INIT_REQUIREMENTS.md
 CLAUDE.md
+
+# Project-specific ignores
+Typhoon/

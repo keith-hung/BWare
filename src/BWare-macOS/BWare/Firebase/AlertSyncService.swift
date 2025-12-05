@@ -202,11 +202,13 @@ class AlertSyncService: NSObject, ObservableObject, URLSessionDataDelegate {
     }
 
     private func processAlertData(_ data: [String: Any]) {
+        print("[AlertSyncService] Processing alert data: \(data)")
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
 
             guard let statusString = data["status"] as? String,
                   let status = AlertStatus(rawValue: statusString) else {
+                print("[AlertSyncService] Invalid or missing status, defaulting to normal")
                 self.alertState = .normal
                 self.delegate?.didReceiveAlertState(.normal)
                 return
@@ -218,7 +220,9 @@ class AlertSyncService: NSObject, ObservableObject, URLSessionDataDelegate {
 
             // Check if alert has expired
             let now = Int64(Date().timeIntervalSince1970)
+            print("[AlertSyncService] Expiry check: now=\(now), expiresAt=\(expiresAt), expired=\(expiresAt <= now)")
             if status == .alert && expiresAt <= now {
+                print("[AlertSyncService] Alert expired, resetting to normal")
                 self.resetToNormal()
                 return
             }
@@ -230,6 +234,7 @@ class AlertSyncService: NSObject, ObservableObject, URLSessionDataDelegate {
                 triggeredAt: triggeredAt
             )
 
+            print("[AlertSyncService] Alert state updated: status=\(status.rawValue), expiresAt=\(expiresAt)")
             self.delegate?.didReceiveAlertState(self.alertState)
         }
     }
@@ -253,6 +258,7 @@ class AlertSyncService: NSObject, ObservableObject, URLSessionDataDelegate {
             }
         }
 
+        print("[AlertSyncService] Received SSE data: \(data.count) bytes")
         sseBuffer.append(data)
 
         // Process complete SSE messages (end with \n\n)
@@ -266,9 +272,12 @@ class AlertSyncService: NSObject, ObservableObject, URLSessionDataDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         DispatchQueue.main.async { [weak self] in
             if let error = error as NSError?, error.code != NSURLErrorCancelled {
+                print("[AlertSyncService] SSE connection error: \(error.localizedDescription)")
                 self?.connectionStatus = .disconnected(reason: .networkUnavailable)
                 self?.delegate?.didChangeConnectionStatus(.disconnected(reason: .networkUnavailable))
                 self?.scheduleRetry()
+            } else if let error = error {
+                print("[AlertSyncService] SSE connection cancelled")
             }
         }
     }
