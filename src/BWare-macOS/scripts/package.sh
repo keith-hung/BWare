@@ -62,6 +62,10 @@ fi
 # Set executable permission
 chmod +x "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 
+# Ad-hoc code signing (allows app to run without "damaged" error)
+echo "5.5. Ad-hoc code signing..."
+codesign --force --deep --sign - "$APP_BUNDLE"
+
 # Remove quarantine attribute (for local testing)
 xattr -cr "$APP_BUNDLE" 2>/dev/null || true
 
@@ -92,7 +96,7 @@ echo "  ZIP:  $OUTPUT_DIR/${APP_NAME}-${VERSION_STRING}.zip"
 echo "  DMG:  $DMG_FINAL"
 echo ""
 echo "Distribution notes:"
-echo "  - This app is NOT signed or notarized"
-echo "  - Users must: Right-click > Open > Allow"
-echo "  - Or: System Settings > Privacy & Security > Allow"
+echo "  - This app is ad-hoc signed (not notarized)"
+echo "  - Users may need to: xattr -cr /Applications/BWare.app"
+echo "  - Or: Right-click > Open, then click Open again"
 echo ""
