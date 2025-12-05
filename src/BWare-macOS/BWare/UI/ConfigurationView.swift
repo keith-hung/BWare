@@ -95,9 +95,17 @@ struct ConfigurationView: View {
             .buttonStyle(.borderedProminent)
             .disabled(databaseUrl.trimmingCharacters(in: .whitespaces).isEmpty)
             .keyboardShortcut(.defaultAction)
+
+            // Version info (settings only)
+            if !isFirstRun {
+                Spacer().frame(height: 10)
+                Text("Version \(AppVersion.displayVersion)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .padding(40)
-        .frame(width: 480, height: isFirstRun ? 450 : 400)
+        .frame(width: 480, height: isFirstRun ? 450 : 420)
         .onAppear {
             loadConfiguration()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {

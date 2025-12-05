@@ -107,3 +107,6 @@ GoogleService-Info.plist
 dist/
 *.dmg
 *.zip
+
+# Generated files
+**/Generated/
