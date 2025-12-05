@@ -110,3 +110,9 @@ dist/
 
 # Generated files
 **/Generated/
+
+# Claude Code / AI tooling
+.claude/
+.specify/
+INIT_REQUIREMENTS.md
+CLAUDE.md
