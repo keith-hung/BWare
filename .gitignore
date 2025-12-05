@@ -114,6 +114,7 @@ dist/
 # Claude Code / AI tooling
 .claude/
 .specify/
+specs/
 INIT_REQUIREMENTS.md
 CLAUDE.md
 
