@@ -54,7 +54,7 @@ class StatusItemManager: NSObject, AlertStateDelegate {
     /// Shows the status item in the menu bar.
     func show() {
         statusItem.isVisible = true
-        updateIcon(for: .normal)
+        updateIcon(for: currentState.status)
         updateTooltip()
     }
 
@@ -67,10 +67,13 @@ class StatusItemManager: NSObject, AlertStateDelegate {
     func updateIcon(for status: AlertStatus) {
         guard let button = statusItem.button else { return }
 
-        // Check connection status first
-        if case .disconnected = connectionStatus {
+        // Check connection status first - show gray for connecting or disconnected
+        switch connectionStatus {
+        case .connecting, .disconnected:
             button.image = MenuBarIcons.disconnectedIcon
             return
+        case .connected:
+            break
         }
 
         switch status {
@@ -85,13 +88,18 @@ class StatusItemManager: NSObject, AlertStateDelegate {
     func updateTooltip() {
         let tooltip: String
 
-        if case .disconnected = connectionStatus {
+        switch connectionStatus {
+        case .connecting:
+            tooltip = "B-Ware: Connecting..."
+        case .disconnected:
             tooltip = "B-Ware: Disconnected"
-        } else if currentState.status == .alert {
-            let remaining = timerService.remainingSeconds
-            tooltip = "B-Ware: Alert (\(remaining)s remaining)"
-        } else {
-            tooltip = "B-Ware: Normal"
+        case .connected:
+            if currentState.status == .alert {
+                let remaining = timerService.remainingSeconds
+                tooltip = "B-Ware: Alert (\(remaining)s remaining)"
+            } else {
+                tooltip = "B-Ware: Normal"
+            }
         }
 
         statusItem.button?.toolTip = tooltip
