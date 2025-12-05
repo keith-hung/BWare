@@ -51,9 +51,13 @@ cp "$PROJECT_DIR/Resources/Info.plist" "$APP_BUNDLE/Contents/"
 # Create PkgInfo
 echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
 
-# Create app icon (using SF Symbol as placeholder)
-# For a real app, you'd want to create an .icns file
-echo "5. Note: Using system default icon. Add AppIcon.icns to Resources/ for custom icon."
+# Copy app icon
+echo "5. Copying app icon..."
+if [ -f "$PROJECT_DIR/Resources/AppIcon.icns" ]; then
+    cp "$PROJECT_DIR/Resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/"
+else
+    echo "   Warning: AppIcon.icns not found. Run: swift scripts/generate-icon.swift && iconutil -c icns Resources/AppIcon.iconset -o Resources/AppIcon.icns"
+fi
 
 # Set executable permission
 chmod +x "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
