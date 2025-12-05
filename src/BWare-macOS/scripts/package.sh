@@ -61,18 +61,20 @@ chmod +x "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 # Remove quarantine attribute (for local testing)
 xattr -cr "$APP_BUNDLE" 2>/dev/null || true
 
+# Create versioned filenames (e.g., 0.1.0-abc1234 or 0.1.0-abc1234-dirty)
+VERSION_STRING="${SEMVER}-${COMMIT_HASH}"
+
 # Create ZIP for distribution
 echo "6. Creating ZIP archive..."
 cd "$OUTPUT_DIR"
-zip -r -q "$APP_NAME.zip" "$APP_NAME.app"
+zip -r -q "${APP_NAME}-${VERSION_STRING}.zip" "$APP_NAME.app"
 
 # Create DMG (optional, nicer for distribution)
 echo "7. Creating DMG..."
-DMG_TMP="$OUTPUT_DIR/tmp.dmg"
-DMG_FINAL="$OUTPUT_DIR/$APP_NAME.dmg"
+DMG_FINAL="$OUTPUT_DIR/${APP_NAME}-${VERSION_STRING}.dmg"
 
 # Remove existing DMG files
-rm -f "$DMG_TMP" "$DMG_FINAL"
+rm -f "$DMG_FINAL"
 
 # Create DMG directly from folder
 hdiutil create -volname "$APP_NAME" -srcfolder "$APP_BUNDLE" -ov -format UDZO "$DMG_FINAL" -quiet
@@ -82,7 +84,7 @@ echo "=== Packaging Complete ==="
 echo ""
 echo "Output files:"
 echo "  App:  $APP_BUNDLE"
-echo "  ZIP:  $OUTPUT_DIR/$APP_NAME.zip"
+echo "  ZIP:  $OUTPUT_DIR/${APP_NAME}-${VERSION_STRING}.zip"
 echo "  DMG:  $DMG_FINAL"
 echo ""
 echo "Distribution notes:"

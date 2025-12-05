@@ -18,7 +18,7 @@ A lightweight menu bar app for macOS that syncs status across multiple devices u
 
 ## Installation
 
-1. Download the latest `BWare.dmg` from [Releases](../../releases)
+1. Download the latest DMG from [Releases](../../releases)
 2. Open the DMG and drag `BWare.app` to your Applications folder
 3. First launch: Right-click the app > Open > Open (required for unsigned apps)
 4. Configure your Firebase Database URL when prompted
