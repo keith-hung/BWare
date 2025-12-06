@@ -33,6 +33,15 @@ class AlertSyncService: NSObject, ObservableObject, URLSessionDataDelegate {
     /// Retry timer
     private var retryTimer: Timer?
 
+    /// Health check timer for detecting stale connections
+    private var healthCheckTimer: Timer?
+
+    /// Last time we received any data from SSE (including keep-alive)
+    private var lastDataReceivedTime: Date?
+
+    /// Connection timeout threshold (Firebase sends keep-alive every ~30s)
+    private let connectionTimeoutSeconds: TimeInterval = 90
+
     /// Combine subscriptions
     private var cancellables = Set<AnyCancellable>()
 
@@ -81,6 +90,8 @@ class AlertSyncService: NSObject, ObservableObject, URLSessionDataDelegate {
         sseTask = nil
         retryTimer?.invalidate()
         retryTimer = nil
+        healthCheckTimer?.invalidate()
+        healthCheckTimer = nil
     }
 
     /// Triggers an alert (sets status to alert with 60s expiration).
@@ -246,15 +257,62 @@ class AlertSyncService: NSObject, ObservableObject, URLSessionDataDelegate {
         }
     }
 
+    private func startHealthCheck() {
+        healthCheckTimer?.invalidate()
+        // Check connection health every 30 seconds
+        healthCheckTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+            self?.checkConnectionHealth()
+        }
+        print("[AlertSyncService] Health check timer started (interval: 30s, timeout: \(connectionTimeoutSeconds)s)")
+    }
+
+    private func checkConnectionHealth() {
+        guard connectionStatus == .connected else { return }
+
+        guard let lastReceived = lastDataReceivedTime else {
+            // No data ever received but marked as connected - reconnect
+            print("[AlertSyncService] Health check: No data ever received, reconnecting...")
+            reconnectSSE()
+            return
+        }
+
+        let timeSinceLastData = Date().timeIntervalSince(lastReceived)
+        print("[AlertSyncService] Health check: \(Int(timeSinceLastData))s since last data")
+
+        if timeSinceLastData > connectionTimeoutSeconds {
+            print("[AlertSyncService] Health check: Connection stale (\(Int(timeSinceLastData))s > \(Int(connectionTimeoutSeconds))s), reconnecting...")
+            reconnectSSE()
+        }
+    }
+
+    private func reconnectSSE() {
+        // Stop current connection
+        sseTask?.cancel()
+        sseTask = nil
+        healthCheckTimer?.invalidate()
+        healthCheckTimer = nil
+
+        // Update status
+        connectionStatus = .connecting
+        delegate?.didChangeConnectionStatus(connectionStatus)
+
+        // Reconnect
+        connectSSE()
+    }
+
     // MARK: - URLSessionDataDelegate
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        // Update last data received time for health monitoring
+        lastDataReceivedTime = Date()
+
         // Connected successfully
         DispatchQueue.main.async { [weak self] in
             if self?.connectionStatus != .connected {
                 print("[AlertSyncService] SSE connected successfully")
                 self?.connectionStatus = .connected
                 self?.delegate?.didChangeConnectionStatus(.connected)
+                self?.startHealthCheck()
             }
         }
 
