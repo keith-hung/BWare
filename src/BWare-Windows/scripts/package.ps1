@@ -1,91 +1,118 @@
-# Package B-Ware Windows app for distribution
+# B-Ware Windows Packaging Script
 # Usage: .\scripts\package.ps1
-#
-# Output: Single self-contained .exe file
 
 $ErrorActionPreference = "Stop"
 
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ProjectDir = Split-Path -Parent $ScriptDir
+$ScriptDir = $PSScriptRoot
+$ProjectDir = Split-Path $ScriptDir
+$RepoRoot = Split-Path (Split-Path $ProjectDir)
 $AppName = "BWare"
-$OutputDir = Join-Path $ProjectDir "dist"
-$CsProj = Join-Path $ProjectDir "BWare\BWare.csproj"
+$BuildDir = "$ProjectDir\BWare\bin\Release\net8.0-windows\win-x64\publish"
+$OutputDir = "$ProjectDir\dist"
 
 Write-Host "=== B-Ware Windows Packaging Script ===" -ForegroundColor Cyan
 Write-Host ""
 
-# Check for .NET SDK
-if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
-    Write-Host "Error: .NET SDK not found. Please install .NET 8.0 SDK." -ForegroundColor Red
-    exit 1
-}
-
 # Clean previous build
-Write-Host "1. Cleaning previous build..."
+Write-Host "1. Cleaning previous build..." -ForegroundColor Green
 if (Test-Path $OutputDir) {
     Remove-Item -Recurse -Force $OutputDir
 }
 New-Item -ItemType Directory -Path $OutputDir | Out-Null
 
-# Get version info
-Write-Host "2. Getting version info..."
-$VersionFile = Join-Path $ProjectDir "..\..\VERSION"
-if (Test-Path $VersionFile) {
-    $SemVer = (Get-Content $VersionFile -Raw).Trim()
-} else {
-    $SemVer = "1.0.0"
-}
+# Read version from repository root (single source of truth)
+Write-Host "2. Reading version info..." -ForegroundColor Green
+$Semver = (Get-Content "$RepoRoot\VERSION" -Raw).Trim()
 
+# Get git commit info
+Push-Location $ProjectDir
 try {
-    $CommitHash = (git rev-parse --short HEAD 2>$null)
-    $IsDirty = (git status --porcelain 2>$null)
-    if ($IsDirty) {
+    $CommitHash = git rev-parse --short HEAD 2>$null
+    if (-not $CommitHash) {
+        $CommitHash = "unknown"
+    }
+
+    # Check if working directory is dirty
+    $GitStatus = git status --porcelain 2>$null
+    if ($GitStatus) {
         $CommitHash = "$CommitHash-dirty"
     }
 } catch {
     $CommitHash = "unknown"
+} finally {
+    Pop-Location
 }
-$VersionString = "$SemVer-$CommitHash"
 
-Write-Host "   Version: $VersionString" -ForegroundColor Green
+Write-Host "   Version: $Semver" -ForegroundColor Gray
+Write-Host "   Commit:  $CommitHash" -ForegroundColor Gray
 
 # Build release
-Write-Host "4. Building release (win-x64)..."
-Push-Location (Join-Path $ProjectDir "BWare")
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o "$OutputDir\publish"
-Pop-Location
+Write-Host "3. Building release..." -ForegroundColor Green
+Push-Location "$ProjectDir\BWare"
+try {
+    dotnet publish -c Release -r win-x64 --self-contained true `
+        -p:PublishSingleFile=true `
+        -p:IncludeNativeLibrariesForSelfExtract=true `
+        -p:EnableCompressionInSingleFile=true `
+        -p:PublishTrimmed=false | Out-Null
 
-# Rename executable with version
-Write-Host "5. Organizing output..."
-$ExeName = "$AppName-$VersionString.exe"
-Move-Item "$OutputDir\publish\$AppName.exe" "$OutputDir\$ExeName"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Build failed with exit code $LASTEXITCODE"
+    }
+} finally {
+    Pop-Location
+}
 
-# Clean up publish folder
-Remove-Item -Recurse -Force "$OutputDir\publish"
+# Create versioned filenames (e.g., 1.0.0-abc1234 or 1.0.0-abc1234-dirty)
+$VersionString = "$Semver-$CommitHash"
 
-# Create ZIP for distribution
-Write-Host "6. Creating ZIP archive..."
-$ZipName = "$AppName-$VersionString-win-x64.zip"
-Compress-Archive -Path "$OutputDir\$ExeName" -DestinationPath "$OutputDir\$ZipName"
+# Copy executable with versioned name
+Write-Host "4. Copying executable..." -ForegroundColor Green
+$ExeName = "$AppName.exe"
+$VersionedExeName = "$AppName-$VersionString.exe"
+Copy-Item "$BuildDir\$ExeName" "$OutputDir\$VersionedExeName"
+Write-Host "   Created: $VersionedExeName" -ForegroundColor Gray
 
-# Calculate checksum
-Write-Host "7. Calculating checksum..."
-$Hash = Get-FileHash "$OutputDir\$ExeName" -Algorithm SHA256
-"$($Hash.Hash.ToLower())  $ExeName" | Out-File -FilePath "$OutputDir\$AppName-$VersionString-win-x64.sha256" -Encoding ascii
+# Copy README
+Write-Host "5. Copying documentation..." -ForegroundColor Green
+if (Test-Path "$ProjectDir\README.md") {
+    Copy-Item "$ProjectDir\README.md" "$OutputDir\README.txt"
+    Write-Host "   Copied: README.txt" -ForegroundColor Gray
+}
 
-$FileSize = (Get-Item "$OutputDir\$ExeName").Length / 1MB
+# Create ZIP archive
+Write-Host "6. Creating ZIP archive..." -ForegroundColor Green
+$ZipName = "$AppName-Windows-$VersionString.zip"
+$ZipPath = "$OutputDir\$ZipName"
+
+# Create temporary directory for clean ZIP structure
+$TempZipDir = "$OutputDir\temp-zip"
+New-Item -ItemType Directory -Path $TempZipDir | Out-Null
+Copy-Item "$OutputDir\$VersionedExeName" "$TempZipDir\$ExeName"
+if (Test-Path "$OutputDir\README.txt") {
+    Copy-Item "$OutputDir\README.txt" "$TempZipDir\"
+}
+
+Compress-Archive -Path "$TempZipDir\*" -DestinationPath $ZipPath -Force
+Remove-Item -Recurse -Force $TempZipDir
+
+Write-Host "   Created: $ZipName" -ForegroundColor Gray
+
+# Calculate file sizes
+$ExeSize = [math]::Round((Get-Item "$OutputDir\$VersionedExeName").Length / 1MB, 2)
+$ZipSize = [math]::Round((Get-Item $ZipPath).Length / 1MB, 2)
 
 Write-Host ""
 Write-Host "=== Packaging Complete ===" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Output files:" -ForegroundColor Yellow
-Write-Host "  EXE:      $OutputDir\$ExeName"
-Write-Host "  ZIP:      $OutputDir\$ZipName"
-Write-Host "  Checksum: $OutputDir\$AppName-$VersionString-win-x64.sha256"
+Write-Host "Output files:" -ForegroundColor White
+Write-Host "  Executable: $OutputDir\$VersionedExeName ($ExeSize MB)" -ForegroundColor Gray
+Write-Host "  ZIP:        $OutputDir\$ZipName ($ZipSize MB)" -ForegroundColor Gray
 Write-Host ""
-Write-Host "Distribution notes:" -ForegroundColor Yellow
-Write-Host "  - Single self-contained executable (no .NET runtime required)"
-Write-Host "  - Windows 10 (1809+) / Windows 11 supported"
-Write-Host "  - Users may see SmartScreen warning on first run"
-Write-Host "  - Size: $([math]::Round($FileSize, 1)) MB"
+Write-Host "Distribution notes:" -ForegroundColor White
+Write-Host "  - Upload $ZipName to GitHub Releases" -ForegroundColor Gray
+Write-Host "  - ZIP contains: $ExeName (unversioned for user convenience) + README.txt" -ForegroundColor Gray
+Write-Host ""
+Write-Host "To create GitHub release:" -ForegroundColor Yellow
+Write-Host "  gh release create v$Semver dist\$ZipName --title \"B-Ware Windows v$Semver\" --notes \"Release v$Semver ($CommitHash)\"" -ForegroundColor Gray
 Write-Host ""
