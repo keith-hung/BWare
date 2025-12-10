@@ -35,6 +35,8 @@ public class TrayIcon : IDisposable
 
     public TrayIcon()
     {
+        Services.Logger.Debug("TrayIcon: Initializing...");
+
         // Generate icons dynamically
         _greenIcon = IconGenerator.CreateGreenIcon();
         _redIcon = IconGenerator.CreateRedIcon();
@@ -44,11 +46,14 @@ public class TrayIcon : IDisposable
         {
             Icon = _grayIcon,
             Text = "B-Ware: Connecting...",
-            Visible = true,
-            ContextMenuStrip = CreateContextMenu()
+            Visible = true
+            // Don't set ContextMenuStrip here - we'll handle it manually
         };
 
-        _notifyIcon.MouseClick += OnMouseClick;
+        // Handle mouse events manually for better control
+        _notifyIcon.MouseDown += OnMouseDown;
+
+        Services.Logger.Info("TrayIcon: Initialized and visible");
     }
 
     /// <summary>
@@ -125,23 +130,41 @@ public class TrayIcon : IDisposable
         var menu = new ContextMenuStrip();
 
         var settingsItem = new ToolStripMenuItem("Settings...");
-        settingsItem.Click += (s, e) => SettingsRequested?.Invoke(this, EventArgs.Empty);
+        settingsItem.Click += (s, e) =>
+        {
+            Services.Logger.Info("TrayIcon: Settings menu clicked");
+            SettingsRequested?.Invoke(this, EventArgs.Empty);
+        };
 
         var exitItem = new ToolStripMenuItem("Exit");
-        exitItem.Click += (s, e) => ExitRequested?.Invoke(this, EventArgs.Empty);
+        exitItem.Click += (s, e) =>
+        {
+            Services.Logger.Info("TrayIcon: Exit menu clicked");
+            ExitRequested?.Invoke(this, EventArgs.Empty);
+        };
 
         menu.Items.Add(settingsItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(exitItem);
 
+        Services.Logger.Debug("TrayIcon: Context menu created with 2 items");
         return menu;
     }
 
-    private void OnMouseClick(object? sender, MouseEventArgs e)
+    private void OnMouseDown(object? sender, MouseEventArgs e)
     {
+        Services.Logger.Debug($"TrayIcon: Mouse down - Button: {e.Button}");
+
         if (e.Button == MouseButtons.Left)
         {
+            Services.Logger.Info("TrayIcon: Left click detected, triggering alert");
             LeftClicked?.Invoke(this, EventArgs.Empty);
+        }
+        else if (e.Button == MouseButtons.Right)
+        {
+            Services.Logger.Debug("TrayIcon: Right click detected, showing context menu");
+            var menu = CreateContextMenu();
+            menu.Show(Cursor.Position);
         }
     }
 

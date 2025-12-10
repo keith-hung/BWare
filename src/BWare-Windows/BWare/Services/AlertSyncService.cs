@@ -22,8 +22,14 @@ public class AlertSyncService : IDisposable
     private DateTime _lastClickTime = DateTime.MinValue;
     private AlertState _currentState = AlertState.Normal;
 
+    // Health check timer for detecting stale connections
+    private System.Threading.Timer? _healthCheckTimer;
+    private DateTime? _lastDataReceivedTime;
+
     private const int ReconnectDelayMs = 5000;
     private const int ClickDebounceMs = 500;
+    private const double ConnectionTimeoutSeconds = 90; // Firebase sends keep-alive every ~30s
+    private const double HealthCheckIntervalSeconds = 30;
 
     /// <summary>
     /// Gets the current connection state.
@@ -66,6 +72,8 @@ public class AlertSyncService : IDisposable
     public void Stop()
     {
         _cts?.Cancel();
+        _healthCheckTimer?.Dispose();
+        _healthCheckTimer = null;
     }
 
     /// <summary>
@@ -148,16 +156,19 @@ public class AlertSyncService : IDisposable
         {
             try
             {
+                Logger.Info("Connecting to Firebase...");
                 CurrentConnectionState = ConnectionState.Connecting;
                 ConnectionStateChanged?.Invoke(this, CurrentConnectionState);
                 await ConnectAsync(ct);
             }
             catch (OperationCanceledException)
             {
+                Logger.Info("Connection cancelled");
                 break;
             }
             catch (Exception ex)
             {
+                Logger.Error($"Connection failed: {ex.GetType().Name} - {ex.Message}");
                 var reason = ex switch
                 {
                     HttpRequestException => DisconnectReason.NetworkUnavailable,
@@ -169,6 +180,7 @@ public class AlertSyncService : IDisposable
                 // Wait before reconnecting
                 try
                 {
+                    Logger.Info($"Retrying in {ReconnectDelayMs}ms...");
                     await Task.Delay(ReconnectDelayMs, ct);
                 }
                 catch (OperationCanceledException)
@@ -181,6 +193,7 @@ public class AlertSyncService : IDisposable
 
     private async Task ConnectAsync(CancellationToken ct)
     {
+        Logger.Debug($"Requesting SSE from: {_firebaseUrl.SseUrl}");
         var request = new HttpRequestMessage(HttpMethod.Get, _firebaseUrl.SseUrl);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
         request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
@@ -189,8 +202,12 @@ public class AlertSyncService : IDisposable
             HttpCompletionOption.ResponseHeadersRead, ct);
 
         response.EnsureSuccessStatusCode();
+        Logger.Info("Connected! Listening for events...");
         CurrentConnectionState = ConnectionState.Connected;
         ConnectionStateChanged?.Invoke(this, CurrentConnectionState);
+
+        // Start health check timer
+        StartHealthCheck();
 
         // Process any queued triggers from when offline
         await ProcessQueuedTriggerAsync();
@@ -204,6 +221,9 @@ public class AlertSyncService : IDisposable
         {
             var line = await reader.ReadLineAsync(ct);
             if (line == null) continue;
+
+            // Update last data received time for health monitoring
+            _lastDataReceivedTime = DateTime.UtcNow;
 
             if (line.StartsWith("event:"))
             {
@@ -253,9 +273,9 @@ public class AlertSyncService : IDisposable
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore JSON parsing errors
+            Logger.Warning($"Failed to parse SSE data: {ex.Message}");
         }
     }
 
@@ -268,10 +288,70 @@ public class AlertSyncService : IDisposable
         {
             await _httpClient.PutAsync(_firebaseUrl.RestUrl, content);
         }
-        catch
+        catch (Exception ex)
         {
-            // Handle write errors (will be enhanced in Phase 7 for offline queue)
+            Logger.Error($"Failed to write alert: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Starts the periodic health check timer.
+    /// Firebase sends keep-alive messages every ~30 seconds, so we check every 30 seconds
+    /// and reconnect if no data has been received for 90+ seconds.
+    /// </summary>
+    private void StartHealthCheck()
+    {
+        _healthCheckTimer?.Dispose();
+        _healthCheckTimer = new System.Threading.Timer(
+            _ => CheckConnectionHealth(),
+            null,
+            TimeSpan.FromSeconds(HealthCheckIntervalSeconds),
+            TimeSpan.FromSeconds(HealthCheckIntervalSeconds)
+        );
+        Logger.Info($"Health check timer started (interval: {HealthCheckIntervalSeconds}s, timeout: {ConnectionTimeoutSeconds}s)");
+    }
+
+    /// <summary>
+    /// Checks if the connection is still healthy based on last data received time.
+    /// If no data has been received for longer than the timeout threshold, reconnects.
+    /// </summary>
+    private void CheckConnectionHealth()
+    {
+        if (CurrentConnectionState.Status != ConnectionStatus.Connected)
+            return;
+
+        if (_lastDataReceivedTime == null)
+        {
+            // No data ever received but marked as connected - reconnect
+            Logger.Info("Health check: No data ever received, reconnecting...");
+            ReconnectSSE();
+            return;
+        }
+
+        var timeSinceLastData = DateTime.UtcNow - _lastDataReceivedTime.Value;
+        Logger.Debug($"Health check: {(int)timeSinceLastData.TotalSeconds}s since last data");
+
+        if (timeSinceLastData.TotalSeconds > ConnectionTimeoutSeconds)
+        {
+            Logger.Info($"Health check: Connection stale ({(int)timeSinceLastData.TotalSeconds}s > {ConnectionTimeoutSeconds}s), reconnecting...");
+            ReconnectSSE();
+        }
+    }
+
+    /// <summary>
+    /// Forces a reconnection by cancelling the current connection and restarting.
+    /// </summary>
+    private void ReconnectSSE()
+    {
+        // Cancel current connection (will trigger retry logic in ConnectWithReconnectAsync)
+        _cts?.Cancel();
+
+        // Stop health check timer
+        _healthCheckTimer?.Dispose();
+        _healthCheckTimer = null;
+
+        // Start new connection
+        _ = StartAsync();
     }
 
     public void Dispose()
@@ -281,6 +361,7 @@ public class AlertSyncService : IDisposable
 
         _cts?.Cancel();
         _cts?.Dispose();
+        _healthCheckTimer?.Dispose();
         _httpClient.Dispose();
     }
 }

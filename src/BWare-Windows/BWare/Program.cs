@@ -13,45 +13,65 @@ internal static class Program
     private static AlertSyncService? _alertSyncService;
     private static TimerService? _timerService;
     private static ClientConfiguration? _configuration;
+    private static ApplicationContext? _appContext;
 
     [STAThread]
     static void Main()
     {
+        // Initialize logger
+        Logger.Initialize();
+        Logger.Info($"Settings path: {ClientConfiguration.SettingsPath}");
+
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         Application.SetHighDpiMode(HighDpiMode.SystemAware);
 
         // Load or create configuration
+        Logger.Info("Loading configuration...");
         _configuration = ClientConfiguration.Load();
 
         if (_configuration == null)
         {
+            Logger.Info("No configuration found - showing setup wizard");
             // First run - show setup wizard
             var setupWindow = new SetupWindow();
             var result = setupWindow.ShowDialog();
 
             if (result != true || !setupWindow.SetupCompleted || setupWindow.Configuration == null)
             {
+                Logger.Info("Setup cancelled by user");
                 // User cancelled setup
+                Logger.Close();
                 return;
             }
 
             _configuration = setupWindow.Configuration;
         }
 
+        Logger.Info($"Configuration loaded:");
+        Logger.Info($"  Database URL: {_configuration.DatabaseUrl}");
+        Logger.Info($"  Client ID: {_configuration.ClientId}");
+
         // Parse and validate Firebase URL
         var parsedUrl = FirebaseConfig.Parse(_configuration.DatabaseUrl);
         if (parsedUrl == null)
         {
+            Logger.Error("Invalid Firebase URL!");
             MessageBox.Show(
                 "Invalid Firebase URL in settings.\n\nPlease check: " + ClientConfiguration.SettingsPath,
                 "B-Ware Configuration Error",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
+            Logger.Close();
             return;
         }
 
+        Logger.Info($"Parsed Firebase URL:");
+        Logger.Info($"  SSE: {parsedUrl.SseUrl}");
+        Logger.Info($"  REST: {parsedUrl.RestUrl}");
+
         // Initialize services
+        Logger.Info("Initializing services...");
         _alertSyncService = new AlertSyncService(parsedUrl, _configuration.ClientId);
         _timerService = new TimerService();
         _trayIcon = new TrayIcon();
@@ -60,10 +80,13 @@ internal static class Program
         WireEvents();
 
         // Start Firebase connection
+        Logger.Info("Starting Firebase connection...");
         _ = _alertSyncService.StartAsync();
 
-        // Run the application message loop
-        Application.Run();
+        // Run the application message loop with context
+        // This keeps the application running even without visible windows
+        _appContext = new ApplicationContext();
+        Application.Run(_appContext);
     }
 
     private static void WireEvents()
@@ -112,6 +135,7 @@ internal static class Program
         // Tray icon left click - trigger alert
         _trayIcon.LeftClicked += async (s, e) =>
         {
+            Logger.Info("Event: Left click received, triggering alert");
             if (_alertSyncService != null)
             {
                 await _alertSyncService.TriggerAlertAsync();
@@ -121,6 +145,7 @@ internal static class Program
         // Settings requested
         _trayIcon.SettingsRequested += (s, e) =>
         {
+            Logger.Info("Event: Settings requested");
             if (_configuration == null) return;
 
             var settingsWindow = new SettingsWindow(_configuration);
@@ -133,6 +158,7 @@ internal static class Program
                 // Reconnect if URL changed
                 if (settingsWindow.UrlChanged)
                 {
+                    Logger.Info("Settings: URL changed, reconnecting...");
                     var newParsedUrl = FirebaseConfig.Parse(_configuration.DatabaseUrl);
                     if (newParsedUrl != null)
                     {
@@ -145,15 +171,19 @@ internal static class Program
         // Exit requested
         _trayIcon.ExitRequested += (s, e) =>
         {
+            Logger.Info("Event: Exit requested");
             Shutdown();
         };
     }
 
     private static void Shutdown()
     {
+        Logger.Info("Application shutting down...");
         _alertSyncService?.Stop();
         _timerService?.Dispose();
         _trayIcon?.Dispose();
+        Logger.Close();
+        _appContext?.ExitThread();
         Application.Exit();
     }
 }

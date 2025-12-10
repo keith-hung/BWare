@@ -86,6 +86,12 @@ public static class FirebaseConfig
             var region = regionalMatch.Groups[2].Value;
             var path = regionalMatch.Groups[3].Success ? regionalMatch.Groups[3].Value.TrimEnd('/') : "";
 
+            // Remove .json suffix if present (will be added automatically by SseUrl/RestUrl)
+            if (path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                path = path.Substring(0, path.Length - 5);
+            }
+
             return new ParsedFirebaseUrl
             {
                 RootUrl = $"https://{projectId}.{region}.firebasedatabase.app",
@@ -101,6 +107,12 @@ public static class FirebaseConfig
         {
             var projectId = legacyMatch.Groups[1].Value;
             var path = legacyMatch.Groups[2].Success ? legacyMatch.Groups[2].Value.TrimEnd('/') : "";
+
+            // Remove .json suffix if present (will be added automatically by SseUrl/RestUrl)
+            if (path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                path = path.Substring(0, path.Length - 5);
+            }
 
             return new ParsedFirebaseUrl
             {
