@@ -12,6 +12,7 @@ public partial class SettingsWindow : Window
 {
     private readonly ClientConfiguration _originalConfiguration;
     private readonly StartupService _startupService;
+    private readonly HotkeyService _hotkeyService;
 
     /// <summary>
     /// Gets the updated configuration if settings were saved.
@@ -28,21 +29,56 @@ public partial class SettingsWindow : Window
     /// </summary>
     public bool UrlChanged { get; private set; }
 
+    /// <summary>
+    /// Gets whether hotkey settings were changed.
+    /// </summary>
+    public bool HotkeysChanged { get; private set; }
+
     public SettingsWindow(ClientConfiguration configuration)
     {
         InitializeComponent();
 
         _originalConfiguration = configuration;
         _startupService = new StartupService();
+        _hotkeyService = new HotkeyService();
+        _hotkeyService.Initialize();
 
         // Populate fields
         UrlTextBox.Text = configuration.DatabaseUrl;
         ClientIdTextBox.Text = configuration.ClientId;
         LaunchAtLoginCheckBox.IsChecked = _startupService.IsStartupEnabled();
 
+        // Initialize hotkey controls
+        InitializeHotkeyControls(configuration.Hotkeys);
+
         // Display version
         var version = Assembly.GetExecutingAssembly().GetName().Version;
         VersionLabel.Text = $"B-Ware v{version?.Major}.{version?.Minor}.{version?.Build}";
+    }
+
+    private void InitializeHotkeyControls(HotkeyConfiguration hotkeys)
+    {
+        // Set up hotkey service for availability checking
+        TriggerAlertHotkeyBox.SetHotkeyService(_hotkeyService);
+
+        // Load trigger alert hotkey
+        TriggerAlertEnabledCheckBox.IsChecked = hotkeys.TriggerAlert.Enabled;
+        if (hotkeys.TriggerAlert.HasValidKey)
+        {
+            TriggerAlertHotkeyBox.SetHotkey(hotkeys.TriggerAlert);
+        }
+        TriggerAlertHotkeyBox.IsEnabled = hotkeys.TriggerAlert.Enabled;
+    }
+
+    private void HotkeyEnabled_Changed(object sender, RoutedEventArgs e)
+    {
+        // Enable/disable hotkey text box based on checkbox state
+        TriggerAlertHotkeyBox.IsEnabled = TriggerAlertEnabledCheckBox.IsChecked ?? false;
+    }
+
+    private void ResetTriggerHotkey_Click(object sender, RoutedEventArgs e)
+    {
+        TriggerAlertHotkeyBox.SetHotkey(Models.HotkeyBinding.DefaultTriggerAlert());
     }
 
     private void UrlTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
@@ -107,6 +143,15 @@ public partial class SettingsWindow : Window
         // Check if URL changed
         UrlChanged = !string.Equals(newUrl, _originalConfiguration.DatabaseUrl, StringComparison.Ordinal);
 
+        // Build hotkey configuration
+        var newHotkeys = new HotkeyConfiguration
+        {
+            TriggerAlert = TriggerAlertHotkeyBox.GetHotkey(TriggerAlertEnabledCheckBox.IsChecked ?? false)
+        };
+
+        // Check if hotkeys changed
+        HotkeysChanged = !HotkeysEqual(_originalConfiguration.Hotkeys, newHotkeys);
+
         // Update startup registration
         if (launchAtLogin != _startupService.IsStartupEnabled())
         {
@@ -124,7 +169,8 @@ public partial class SettingsWindow : Window
         UpdatedConfiguration = _originalConfiguration with
         {
             DatabaseUrl = newUrl,
-            LaunchAtLogin = launchAtLogin
+            LaunchAtLogin = launchAtLogin,
+            Hotkeys = newHotkeys
         };
 
         // Save to file
@@ -132,6 +178,22 @@ public partial class SettingsWindow : Window
 
         SettingsSaved = true;
         DialogResult = true;
+
+        // Dispose the temporary hotkey service
+        _hotkeyService.Dispose();
         Close();
+    }
+
+    private static bool HotkeysEqual(HotkeyConfiguration a, HotkeyConfiguration b)
+    {
+        return a.TriggerAlert.Enabled == b.TriggerAlert.Enabled &&
+               a.TriggerAlert.Modifiers == b.TriggerAlert.Modifiers &&
+               a.TriggerAlert.Key == b.TriggerAlert.Key;
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        base.OnClosed(e);
+        _hotkeyService.Dispose();
     }
 }

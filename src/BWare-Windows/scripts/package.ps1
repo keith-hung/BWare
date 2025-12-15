@@ -50,7 +50,7 @@ Write-Host "   Commit:  $CommitHash" -ForegroundColor Gray
 Write-Host "3. Building release..." -ForegroundColor Green
 Push-Location "$ProjectDir\BWare"
 try {
-    dotnet publish -c Release -r win-x64 --self-contained true `
+    dotnet publish BWare.csproj -c Release -r win-x64 --self-contained true `
         -p:PublishSingleFile=true `
         -p:IncludeNativeLibrariesForSelfExtract=true `
         -p:EnableCompressionInSingleFile=true `
@@ -93,7 +93,29 @@ if (Test-Path "$OutputDir\README.txt") {
     Copy-Item "$OutputDir\README.txt" "$TempZipDir\"
 }
 
-Compress-Archive -Path "$TempZipDir\*" -DestinationPath $ZipPath -Force
+# Use 7z if available (handles file locks better), otherwise fall back to Compress-Archive
+$7zPath = Get-Command 7z -ErrorAction SilentlyContinue
+if ($7zPath) {
+    Push-Location $TempZipDir
+    & 7z a -tzip $ZipPath * | Out-Null
+    Pop-Location
+} else {
+    # Add retry logic for Compress-Archive due to potential file locks (antivirus, indexer)
+    $maxRetries = 3
+    $retryDelay = 2
+    for ($i = 1; $i -le $maxRetries; $i++) {
+        try {
+            Start-Sleep -Seconds $retryDelay
+            Compress-Archive -Path "$TempZipDir\*" -DestinationPath $ZipPath -Force
+            break
+        } catch {
+            if ($i -eq $maxRetries) {
+                throw "Failed to create ZIP after $maxRetries attempts: $_"
+            }
+            Write-Host "   Retry $i/$maxRetries (file may be locked by antivirus)..." -ForegroundColor Yellow
+        }
+    }
+}
 Remove-Item -Recurse -Force $TempZipDir
 
 Write-Host "   Created: $ZipName" -ForegroundColor Gray

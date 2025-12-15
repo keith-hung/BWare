@@ -12,6 +12,7 @@ internal static class Program
     private static TrayIcon? _trayIcon;
     private static AlertSyncService? _alertSyncService;
     private static TimerService? _timerService;
+    private static HotkeyService? _hotkeyService;
     private static ClientConfiguration? _configuration;
     private static ApplicationContext? _appContext;
 
@@ -75,9 +76,14 @@ internal static class Program
         _alertSyncService = new AlertSyncService(parsedUrl, _configuration.ClientId);
         _timerService = new TimerService();
         _trayIcon = new TrayIcon();
+        _hotkeyService = new HotkeyService();
+        _hotkeyService.Initialize();
 
         // Wire up events
         WireEvents();
+
+        // Register hotkeys
+        RegisterHotkeys(_configuration.Hotkeys);
 
         // Start Firebase connection
         Logger.Info("Starting Firebase connection...");
@@ -87,6 +93,25 @@ internal static class Program
         // This keeps the application running even without visible windows
         _appContext = new ApplicationContext();
         Application.Run(_appContext);
+    }
+
+    private static void RegisterHotkeys(HotkeyConfiguration hotkeys)
+    {
+        if (_hotkeyService == null) return;
+
+        // Register trigger alert hotkey
+        if (hotkeys.TriggerAlert.Enabled && hotkeys.TriggerAlert.HasValidKey)
+        {
+            var success = _hotkeyService.RegisterHotkey(
+                HotkeyService.HOTKEY_TRIGGER_ALERT,
+                hotkeys.TriggerAlert.Modifiers,
+                hotkeys.TriggerAlert.Key);
+
+            if (!success)
+            {
+                Logger.Warning($"Failed to register trigger alert hotkey: {hotkeys.TriggerAlert.DisplayString}");
+            }
+        }
     }
 
     private static void WireEvents()
@@ -165,6 +190,14 @@ internal static class Program
                         _alertSyncService?.Reconnect(newParsedUrl);
                     }
                 }
+
+                // Re-register hotkeys if changed
+                if (settingsWindow.HotkeysChanged)
+                {
+                    Logger.Info("Settings: Hotkeys changed, re-registering...");
+                    _hotkeyService?.UnregisterAll();
+                    RegisterHotkeys(_configuration.Hotkeys);
+                }
             }
         };
 
@@ -174,11 +207,28 @@ internal static class Program
             Logger.Info("Event: Exit requested");
             Shutdown();
         };
+
+        // Hotkey pressed
+        if (_hotkeyService != null)
+        {
+            _hotkeyService.HotkeyPressed += async (s, e) =>
+            {
+                if (e.HotkeyId == HotkeyService.HOTKEY_TRIGGER_ALERT)
+                {
+                    Logger.Info("Event: Trigger alert hotkey pressed");
+                    if (_alertSyncService != null)
+                    {
+                        await _alertSyncService.TriggerAlertAsync();
+                    }
+                }
+            };
+        }
     }
 
     private static void Shutdown()
     {
         Logger.Info("Application shutting down...");
+        _hotkeyService?.Dispose();
         _alertSyncService?.Stop();
         _timerService?.Dispose();
         _trayIcon?.Dispose();
