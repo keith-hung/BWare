@@ -50,7 +50,7 @@ Write-Host "   Commit:  $CommitHash" -ForegroundColor Gray
 Write-Host "3. Building release..." -ForegroundColor Green
 Push-Location "$ProjectDir\BWare"
 try {
-    dotnet publish -c Release -r win-x64 --self-contained true `
+    dotnet publish BWare.csproj -c Release -r win-x64 --self-contained true `
         -p:PublishSingleFile=true `
         -p:IncludeNativeLibrariesForSelfExtract=true `
         -p:EnableCompressionInSingleFile=true `

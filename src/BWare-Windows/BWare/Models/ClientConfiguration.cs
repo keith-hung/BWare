@@ -33,6 +33,12 @@ public record ClientConfiguration
     [JsonPropertyName("lastConnected")]
     public DateTime? LastConnected { get; init; }
 
+    /// <summary>
+    /// Global hotkey configuration.
+    /// </summary>
+    [JsonPropertyName("hotkeys")]
+    public HotkeyConfiguration Hotkeys { get; init; } = HotkeyConfiguration.Default();
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -103,7 +109,8 @@ public record ClientConfiguration
         DatabaseUrl = databaseUrl,
         ClientId = GenerateClientId(),
         LaunchAtLogin = false,
-        LastConnected = null
+        LastConnected = null,
+        Hotkeys = HotkeyConfiguration.Default()
     };
 
     /// <summary>
