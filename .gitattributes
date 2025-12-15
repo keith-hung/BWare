@@ -1,0 +1,34 @@
+# Auto detect text files and normalize line endings to LF
+* text=auto eol=lf
+
+# Force LF for shell scripts (macOS/Linux)
+*.sh text eol=lf
+
+# Force LF for Swift (macOS)
+*.swift text eol=lf
+
+# Force LF for C# and .NET (cross-platform)
+*.cs text eol=lf
+*.csproj text eol=lf
+*.sln text eol=lf
+
+# Force LF for PowerShell (cross-platform)
+*.ps1 text eol=lf
+
+# Force LF for web/config files
+*.json text eol=lf
+*.md text eol=lf
+*.xml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Binary files - no conversion
+*.ico binary
+*.icns binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.dmg binary
+*.zip binary
+*.exe binary

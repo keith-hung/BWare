@@ -6,6 +6,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+REPO_ROOT="$(cd "$PROJECT_DIR/../.." && pwd)"
 APP_NAME="BWare"
 BUILD_DIR="$PROJECT_DIR/.build/release"
 OUTPUT_DIR="$PROJECT_DIR/dist"
@@ -23,8 +24,8 @@ mkdir -p "$OUTPUT_DIR"
 echo "2. Generating version info..."
 "$SCRIPT_DIR/generate-version.sh"
 
-# Read version for Info.plist
-SEMVER=$(cat "$PROJECT_DIR/VERSION" | tr -d '\n')
+# Read version from repository root (single source of truth)
+SEMVER=$(cat "$REPO_ROOT/VERSION" | tr -d '\n')
 COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
     COMMIT_HASH="${COMMIT_HASH}-dirty"
